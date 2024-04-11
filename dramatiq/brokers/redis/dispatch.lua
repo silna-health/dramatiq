@@ -50,8 +50,10 @@ local queue_name = ARGV[3]
 local worker_id = ARGV[4]
 local heartbeat_timeout = ARGV[5]
 local dead_message_ttl = ARGV[6]
-local do_maintenance = ARGV[7]
-local max_unpack_size = ARGV[8]
+local success_message_ttl = ARGV[7]
+local enable_success_queue = ARGV[8]
+local do_maintenance = ARGV[9]
+local max_unpack_size = ARGV[10]
 
 local acks = namespace .. ":__acks__." .. worker_id
 local heartbeats = namespace .. ":__heartbeats__"
@@ -141,7 +143,7 @@ if do_maintenance == "1" then
         end
     end
 
-    local success_message_ids = redis.call("zrangebyscore", squeue_full_name, 0, timestamp - dead_message_ttl)
+    local success_message_ids = redis.call("zrangebyscore", squeue_full_name, 0, timestamp - success_message_ttl)
     if next(success_message_ids) then
         for success_message_ids_batch in iter_chunks(success_message_ids) do
             redis.call("zrem", squeue_full_name, unpack(success_message_ids_batch))
@@ -216,8 +218,10 @@ elseif command == "ack" then
     if redis.call("srem", queue_acks, message_id) > 0 then
         local message = redis.call("hget", queue_messages, message_id)
         if message then
-            redis.call("zadd", squeue_full_name, timestamp, message_id)
-            redis.call("hset", squeue_messages, message_id, message)
+            if enable_success_queue == "1" then
+                redis.call("zadd", squeue_full_name, timestamp, message_id)
+                redis.call("hset", squeue_messages, message_id, message)
+            end
         end
         redis.call("hdel", queue_messages, message_id)
     end
