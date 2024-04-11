@@ -216,9 +216,9 @@ elseif command == "ack" then
     local message_id = ARGS[1]
 
     if redis.call("srem", queue_acks, message_id) > 0 then
-        local message = redis.call("hget", queue_messages, message_id)
-        if message then
-            if enable_success_queue == "1" then
+        if enable_success_queue == "1" then
+            local message = redis.call("hget", queue_messages, message_id)
+            if message then
                 redis.call("zadd", squeue_full_name, timestamp, message_id)
                 redis.call("hset", squeue_messages, message_id, message)
             end
