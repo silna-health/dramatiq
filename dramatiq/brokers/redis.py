@@ -40,7 +40,11 @@ DEFAULT_MAINTENANCE_CHANCE = 1000
 
 #: The amount of time in milliseconds that dead-lettered messages are
 #: kept in Redis for.
-DEFAULT_DEAD_MESSAGE_TTL = 86400000 * 7
+DEFAULT_DEAD_MESSAGE_TTL = 86_400_000 * 7
+
+#: The amount of time in milliseconds that successful messages are
+#: kept in Redis for.
+DEFAULT_SUCCESS_MESSAGE_TTL = 1_000 * 60 * 2
 
 #: The amount of time in milliseconds that has to pass without a
 #: heartbeat for a worker to be considered offline.
@@ -94,9 +98,11 @@ class RedisBroker(Broker):
             maintenance_chance=DEFAULT_MAINTENANCE_CHANCE,
             heartbeat_timeout=DEFAULT_HEARTBEAT_TIMEOUT,
             dead_message_ttl=DEFAULT_DEAD_MESSAGE_TTL,
+            success_message_ttl=DEFAULT_SUCCESS_MESSAGE_TTL,
             requeue_deadline=None,
             requeue_interval=None,
             client=None,
+            enable_success_queue=True,
             **parameters
     ):
         super().__init__(middleware=middleware)
@@ -112,6 +118,8 @@ class RedisBroker(Broker):
         self.namespace = namespace
         self.maintenance_chance = maintenance_chance
         self.heartbeat_timeout = heartbeat_timeout
+        self.success_message_ttl = success_message_ttl
+        self.enable_success_queue = enable_success_queue
         self.dead_message_ttl = dead_message_ttl
         self.queues = set()
         # TODO: Replace usages of StrictRedis (redis-py 2.x) with Redis in Dramatiq 2.0.
@@ -274,6 +282,8 @@ class RedisBroker(Broker):
                 self.broker_id,
                 self.heartbeat_timeout,
                 self.dead_message_ttl,
+                self.success_message_ttl,
+                1 if self.enable_success_queue else 0,
                 self._should_do_maintenance(command),
                 self._max_unpack_size(),
                 *args,
