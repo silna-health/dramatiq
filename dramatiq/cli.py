@@ -30,9 +30,10 @@ import signal
 import sys
 import time
 import types
+import importlib
 from itertools import chain
 from threading import Event, Thread
-from typing import Optional
+from typing import Optional, Type
 
 from dramatiq import Broker, ConnectionError, Worker, __version__, get_broker, get_logger
 from dramatiq.canteen import Canteen, canteen_add, canteen_get, canteen_try_init
@@ -91,6 +92,9 @@ examples:
   # Run dramatiq with gevent.  Make sure you `pip install gevent` first.
   $ dramatiq-gevent --processes 1 --threads 1024 some_module
 
+  # Run dramatiq with a custom worker class.
+  $ dramatiq --worker-class my_package.CustomWorker some_module
+
   # Import extra modules.  Useful when your main module doesn't import
   # all the modules you need.
   $ dramatiq some_module some_other_module
@@ -133,6 +137,29 @@ def import_broker(value):
     if not isinstance(broker_or_callable, Broker):
         raise ImportError("%r is not a Broker." % value)
     return module, broker_or_callable
+
+
+def import_worker_class(value):
+    """Import a worker class from a module path string.
+    
+    Parameters:
+      value(str): A string in the format "module_path.WorkerClass"
+    
+    Returns:
+      type: The worker class
+    """
+    try:
+        module_path, class_name = value.rsplit(".", 1)
+        module = importlib.import_module(module_path)
+        worker_class = getattr(module, class_name)
+        
+        # Verify this is a worker class that has the required API
+        if not hasattr(worker_class, "start") or not hasattr(worker_class, "stop"):
+            raise ImportError(f"{value} does not appear to be a valid Worker class")
+            
+        return worker_class
+    except (ValueError, ImportError, AttributeError) as e:
+        raise ImportError(f"Failed to import worker class {value}: {e}") from e
 
 
 def folder_path(value):
@@ -196,6 +223,10 @@ def make_argument_parser():
     parser.add_argument(
         "--worker-shutdown-timeout", type=int, default=600000,
         help="timeout for worker shutdown, in milliseconds (default: 10 minutes)"
+    )
+    parser.add_argument(
+        "--worker-class", type=str, default="dramatiq.Worker",
+        help="the worker class to use (default: dramatiq.Worker)"
     )
 
     if HAS_WATCHDOG:
@@ -406,9 +437,17 @@ def worker_process(args, worker_id, logging_pipe, canteen, event):
                     for fork in middleware.forks:
                         fork_path = "%s:%s" % (fork.__module__, fork.__name__)
                         canteen_add(canteen, fork_path)
+                        
+        logger.debug(f"Loading worker class: {args.worker_class}...")
+        try:
+            worker_class = import_worker_class(args.worker_class)
+            logger.debug(f"Using worker class: {worker_class.__name__}")
+        except ImportError as e:
+            logger.error(f"Failed to import worker class: {e}")
+            return sys.exit(RET_IMPORT)
 
         logger.debug("Starting worker threads...")
-        worker = Worker(broker, queues=args.queues, worker_threads=args.threads)
+        worker = worker_class(broker, queues=args.queues, worker_threads=args.threads)
         worker.start()
     except ImportError:
         logger.exception("Failed to import module.")

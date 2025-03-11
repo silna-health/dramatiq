@@ -110,6 +110,40 @@ def redis_worker(redis_broker):
     worker.stop()
 
 
+# Gevent-specific worker fixtures
+@pytest.fixture()
+def gevent_stub_worker(stub_broker):
+    """A fixture that creates a GeventWorker with a stub broker."""
+    # Import locally to avoid failing if gevent is not installed
+    from dramatiq.gevent_worker import GeventWorker
+    worker = GeventWorker(stub_broker, worker_timeout=100, worker_threads=32)
+    worker.start()
+    yield worker
+    worker.stop()
+
+
+@pytest.fixture()
+def gevent_rabbitmq_worker(rabbitmq_broker):
+    """A fixture that creates a GeventWorker with a RabbitMQ broker."""
+    # Import locally to avoid failing if gevent is not installed
+    from dramatiq.gevent_worker import GeventWorker
+    worker = GeventWorker(rabbitmq_broker, worker_threads=32)
+    worker.start()
+    yield worker
+    worker.stop()
+
+
+@pytest.fixture()
+def gevent_redis_worker(redis_broker):
+    """A fixture that creates a GeventWorker with a Redis broker."""
+    # Import locally to avoid failing if gevent is not installed
+    from dramatiq.gevent_worker import GeventWorker
+    worker = GeventWorker(redis_broker, worker_threads=32)
+    worker.start()
+    yield worker
+    worker.stop()
+
+
 @pytest.fixture
 def info_logging():
     logger = logging.getLogger()

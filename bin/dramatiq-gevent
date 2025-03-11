@@ -7,8 +7,14 @@ except ImportError:
     sys.exit(1)
 
 import sys
-
-from dramatiq.cli import main
+import os
+from dramatiq.cli import make_argument_parser, main
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Extend the default arguments with our gevent specific worker class
+    parser = make_argument_parser()
+    parser.set_defaults(worker_class="dramatiq.gevent_worker.GeventWorker")
+    
+    # Pass the modified args to main
+    args = parser.parse_args()
+    sys.exit(main(args))
