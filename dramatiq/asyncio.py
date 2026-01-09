@@ -115,21 +115,25 @@ class EventLoopThread(threading.Thread):
             self.logger.info("Stopping event loop...")
 
             async def shutdown():
-                tasks = [t for t in asyncio.all_tasks(self.loop) if t is not asyncio.current_task()]
-                for task in tasks:
-                    task.cancel()
-                if tasks:
-                    try:
-                        await asyncio.wait_for(
-                            asyncio.gather(*tasks, return_exceptions=True),
-                            timeout=90,
-                        )
-                    except asyncio.TimeoutError:
-                        self.logger.warning(
-                            "Event loop shutdown timed out after 90s; stopping anyway."
-                        )
-                await self.loop.shutdown_asyncgens()
-                self.loop.stop()
+                try:
+                    tasks = [t for t in asyncio.all_tasks(self.loop) if t is not asyncio.current_task()]
+                    for task in tasks:
+                        task.cancel()
+                    if tasks:
+                        try:
+                            await asyncio.wait_for(
+                                asyncio.gather(*tasks, return_exceptions=True),
+                                timeout=90,
+                            )
+                        except asyncio.TimeoutError:
+                            self.logger.warning(
+                                "Event loop shutdown timed out after 90s; stopping anyway."
+                            )
+                    await self.loop.shutdown_asyncgens()
+                except Exception:
+                    self.logger.exception("Event loop shutdown failed; stopping anyway.")
+                finally:
+                    self.loop.stop()
 
             asyncio.run_coroutine_threadsafe(shutdown(), self.loop)
             self.join()
